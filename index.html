@@ -1,0 +1,733 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Northline Freight</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --black:#050507; --ink:#111; --grey:#9a9a9a; --line:#e6e6e6; --white:#fff;
+  --blue:#1d2bd8; --orange:#ff7a1a;
+  --head:"Chakra Petch",Arial,sans-serif; --body:"Inter","Helvetica Neue",Arial,sans-serif; --mono:"JetBrains Mono",monospace;
+  --pad:clamp(16px,3vw,48px);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:var(--body);color:var(--ink);background:var(--white);overflow-x:hidden}
+a{color:inherit;text-decoration:none}
+img{display:block;max-width:100%}
+.mono{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase}
+h1,h2,h3{font-family:var(--head);text-transform:uppercase;line-height:.95;font-weight:700}
+.muted{color:var(--grey)}
+.wrap{padding:0 var(--pad)}
+.reveal{opacity:0;transform:translateY(40px);transition:opacity .9s ease,transform .9s ease}
+.reveal.in{opacity:1;transform:none}
+
+/* ---------- preloader ---------- */
+#loader{position:fixed;inset:0;z-index:100;background:var(--black);color:#fff;display:flex;align-items:center;transition:transform 1s cubic-bezier(.7,0,.2,1),visibility 1s}
+#loader.done{transform:translateY(-100%);visibility:hidden}
+body.loading{overflow:hidden}
+.dotmap circle{fill:#333;transition:fill .3s}
+.dotmap circle.city{fill:#2b4bff}
+.dotmap circle.city.on{fill:#5c7cff;filter:drop-shadow(0 0 4px #4466ff)}
+.dotmap .ping{fill:none;stroke:#4466ff;stroke-width:1;transform-box:fill-box;transform-origin:center;animation:ping 1.6s ease-out infinite}
+@keyframes ping{from{transform:scale(1);opacity:1}to{transform:scale(5);opacity:0}}
+#loader .brand{position:absolute;left:var(--pad);top:50%;font-family:var(--head);font-size:18px;letter-spacing:.04em}
+#loader .country{position:absolute;left:var(--pad);top:calc(50% + 40px);color:#666}
+#loader .count{position:absolute;right:var(--pad);bottom:var(--pad);font-family:var(--head);font-size:clamp(60px,10vw,140px)}
+.dotmap{position:absolute;right:4%;top:50%;transform:translateY(-50%);width:min(60vw,900px)}
+@media (max-width:860px){.dotmap{width:92vw;right:4vw;top:32%}}
+
+/* ---------- yard story: stacker -> lift -> load -> drive (scroll-driven) ---------- */
+#story{height:1450vh;position:relative;background:#fff}
+#story .stage{position:sticky;top:0;height:100vh;overflow:hidden;--g:14vh}
+#story .scene{position:absolute;left:0;right:0;bottom:var(--g);width:100%;height:calc(100vh - var(--g) - 4vh)}
+#story .ground{position:absolute;left:0;right:0;bottom:0;height:var(--g);background:var(--black);color:#fff;overflow:hidden}
+.svc-head{position:absolute;left:var(--pad);right:var(--pad);top:7vh;display:grid;grid-template-columns:1fr 1fr;gap:var(--pad);opacity:0}
+.svc-head h2{font-size:clamp(36px,4.6vw,80px)}
+.svc-head p{color:#aaa;line-height:1.5;margin-bottom:14px;max-width:440px}
+.svc-track{position:absolute;left:0;top:7vh;display:flex;opacity:0;will-change:transform}
+.svc-track .svc{width:min(30vw,440px);flex:none;padding:0 40px;border-left:1px solid #222}
+.svc svg{width:44px;height:44px;margin-bottom:30px;stroke:var(--orange)}
+.svc h3{font-size:28px;margin-bottom:14px}
+.svc p{color:#9a9a9a;line-height:1.5;font-size:15px}
+.ground .more{position:absolute;left:50%;bottom:5vh;transform:translateX(-50%);opacity:0}
+@media (max-width:860px){.svc-head{grid-template-columns:1fr}.svc-track .svc{width:80vw}}
+
+/* ---------- reliability road: svg on desktop, ends in a left bend + parking bay ---------- */
+.rely{position:relative;isolation:isolate}
+.relyRoad{position:absolute;left:0;top:0;width:100%;height:100%;z-index:-1;pointer-events:none}
+@media (min-width:861px){.rely .road{background:none}.rely .road::before,.rely .road::after,.rely .road .rig{display:none}}
+@media (max-width:860px){.relyRoad{display:none}}
+
+/* ---------- top-down route into the reliability road ---------- */
+#story .routeLayer{position:absolute;inset:0;opacity:0;pointer-events:none}
+#story .routeLayer svg{display:block;width:100%;height:100%}
+/* stacker + container as 3D faces so the side view can turn 90deg into the front view */
+#story .turnwrap{position:absolute;inset:0;pointer-events:none;visibility:hidden;overflow:hidden}
+#story .turn{position:absolute;width:0;height:0;transform-style:preserve-3d;transform-origin:0 0}
+#story .tface{position:absolute;left:0;top:0;transform-origin:0 0;backface-visibility:hidden}
+#story .tface svg{display:block;width:100%;height:100%}
+/* truck as a 2-face 3D box (side + roof) so the camera can tilt from side view to top view */
+#story .t3wrap{position:absolute;inset:0;perspective:2500px;pointer-events:none;visibility:hidden}
+#story .t3{position:absolute;transform-style:preserve-3d}
+#story .t3side,#story .t3top{position:absolute;left:0;width:100%}
+#story .t3side{top:0;height:100%}
+#story .t3top{bottom:100%;transform-origin:bottom center}
+#story .t3 svg{display:block;width:100%;height:100%}
+#story .step{position:absolute;right:var(--pad);top:28px}
+#speed{position:fixed;left:var(--pad);top:28px;z-index:50;color:#fff;mix-blend-mode:difference;opacity:0;transition:opacity .3s}
+#speed.on{opacity:1}
+
+/* ---------- truck on the road ---------- */
+.road .rig{position:sticky;top:22vh;display:flex;flex-direction:column;align-items:center;z-index:1;padding-top:10vh}
+.road .rig svg{width:84px;filter:drop-shadow(0 18px 18px rgba(0,0,0,.6))}
+.road .beam{position:absolute;top:100%;width:110px;height:120px;margin-top:-6px;background:radial-gradient(ellipse at top,rgba(255,240,200,.35),transparent 70%)}
+@media (max-width:860px){.road{height:auto;min-height:420px}.road .rig{position:relative;top:0;padding:30px 0}}
+
+/* ---------- hero ---------- */
+.hero{position:relative;min-height:100vh;background:var(--black);color:#fff;overflow:hidden}
+.newsbar{border-bottom:1px solid #222;padding:10px var(--pad);color:#aaa}
+nav.top{display:grid;grid-template-columns:1fr 1fr 1fr;padding:22px var(--pad);position:relative;z-index:3}
+.logo{font-family:var(--head);font-size:20px;letter-spacing:.03em}
+nav.top ul{list-style:none;display:grid;gap:10px}
+nav.top ul a{opacity:.85;transition:opacity .2s}
+nav.top ul a:hover{opacity:1;color:var(--orange)}
+.menu-btn{display:none;justify-self:end;background:none;border:1px solid #444;color:#fff;border-radius:99px;padding:8px 14px}
+.planet{position:absolute;right:-18vw;top:6vh;width:70vw;max-width:1100px;aspect-ratio:1;border-radius:50%;
+  background:radial-gradient(circle at 30% 50%,#0a0a2a 0 55%,transparent 70%),radial-gradient(circle at 50% 50%,#000 0 60%,#1d2bd8 68%,#5aa0ff 70%,transparent 72%);
+  box-shadow:-40px 0 120px rgba(40,70,255,.35);}
+.orbit{position:absolute;inset:-4%;border-radius:50%;border:1.5px solid rgba(255,122,26,.75);transform:rotate(-25deg) scaleY(.35);animation:spin 22s linear infinite}
+.orbit.o2{inset:4%;border-color:rgba(255,122,26,.4);transform:rotate(35deg) scaleY(.6);animation-duration:30s;animation-direction:reverse}
+@keyframes spin{to{rotate:360deg}}
+.stars{position:absolute;inset:0;background-image:radial-gradient(#fff 1px,transparent 1.2px);background-size:140px 120px;opacity:.15}
+.hero-copy{position:relative;z-index:2;margin-left:33.33%;padding:22vh var(--pad) 14vh}
+.hero-copy h4{font-family:var(--head);font-size:18px;margin-bottom:14px}
+.hero-copy h1{font-size:clamp(48px,7.4vw,118px);max-width:9ch}
+.hero-copy p{margin:28px 0 30px;max-width:330px;color:#bbb;line-height:1.45}
+.btn{display:inline-block;border:1px solid currentColor;border-radius:99px;padding:12px 20px;margin-right:10px;transition:background .2s,color .2s}
+.btn.solid{background:#fff;color:#000;border-color:#fff}
+.btn:hover{background:var(--orange);border-color:var(--orange);color:#000}
+.fade{height:70vh;background:linear-gradient(#000 0%,#14148a 35%,#5d8fe6 65%,#fff 100%)}
+
+/* ---------- tickers ---------- */
+.ticker{overflow:hidden;white-space:nowrap;border-block:1px solid var(--line);padding:14px 0}
+.ticker .track{display:inline-flex;gap:48px;animation:marq 30s linear infinite}
+@keyframes marq{to{transform:translateX(-50%)}}
+
+/* ---------- stats ---------- */
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:var(--pad);padding:16vh var(--pad)}
+.stats .lede{font-size:clamp(18px,1.6vw,24px);line-height:1.35;margin-bottom:22px}
+.stats .left{align-self:end}
+.stats .left img{width:240px;aspect-ratio:16/10;object-fit:cover;margin-bottom:28px}
+.stats h2{font-size:clamp(40px,5vw,80px)}
+.stat{border-bottom:1px solid var(--line);padding:30px 0}
+.stat b{display:block;font-family:var(--head);font-size:clamp(64px,8vw,130px);line-height:1}
+.stat span{color:#555}
+.pill{font-family:var(--mono);font-size:11px;text-transform:uppercase;border:1px solid #ccc;border-radius:99px;padding:10px 16px;display:inline-block}
+
+
+/* ---------- reliability ---------- */
+.rely{display:grid;grid-template-columns:1fr minmax(140px,14vw) 1fr;gap:var(--pad);padding:0 var(--pad) 45vh} /* bottom space = the left bend + parking bay */
+.rely .left{display:flex;flex-direction:column;justify-content:space-between;padding:20vh 0}
+.rely h2{font-size:clamp(40px,4.6vw,74px)}
+.rely .left p{max-width:330px;line-height:1.45}
+.road{background:#0d0d0d;position:relative;overflow:clip} /* clip, not hidden: hidden would break the sticky truck */
+.road::before,.road::after{content:"";position:absolute;top:0;bottom:0;width:4px;left:32%;background:repeating-linear-gradient(#555 0 40px,transparent 40px 110px);animation:lane 1.4s linear infinite}
+.road::after{left:auto;right:32%}
+@keyframes lane{to{background-position:0 110px}}
+.feat{padding:14vh 0;border-bottom:1px solid var(--line);max-width:340px}
+.feat:last-child{border:0}
+.feat svg{width:34px;height:34px;margin-bottom:22px}
+.feat h3{font-size:26px;margin-bottom:12px}
+.feat p{font-size:14px;line-height:1.5;color:#333}
+
+
+/* ---------- why ---------- */
+.why{padding:16vh var(--pad)}
+.why h2{font-size:clamp(40px,5vw,84px);max-width:12ch;margin:16px 0 10vh}
+.why ol{list-style:none;counter-reset:w}
+.why li{counter-increment:w;display:grid;grid-template-columns:80px 1fr 1fr;gap:var(--pad);padding:34px 0;border-top:1px solid var(--line);align-items:start}
+.why li::before{content:"0" counter(w);font-family:var(--mono);color:var(--grey)}
+.why li h3{font-size:clamp(22px,2vw,32px)}
+.why li p{color:#444;line-height:1.5;max-width:460px}
+
+/* ---------- testimonials ---------- */
+.reviews{background:#f4f4f2;padding:16vh var(--pad)}
+.reviews header{display:grid;grid-template-columns:1fr 1fr;gap:var(--pad);margin-bottom:8vh}
+.reviews h2{font-size:clamp(40px,5vw,84px)}
+.reviews header p{align-self:end;max-width:420px;line-height:1.5;color:#444}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.card{background:#fff;padding:32px;display:flex;flex-direction:column;justify-content:space-between;min-height:380px}
+.card q{font-size:17px;line-height:1.5;quotes:none}
+.card .who{margin-top:30px;border-top:1px solid var(--line);padding-top:18px}
+.card .who b{display:block;font-family:var(--head);font-size:20px;text-transform:uppercase}
+.card .who span{font-size:13px;color:#666}
+
+/* ---------- partners ---------- */
+.partners{padding:12vh 0}
+.partners .label{padding:0 var(--pad);margin-bottom:28px}
+.partners .track span{font-family:var(--head);font-size:40px;color:#c4c4c4;text-transform:uppercase}
+
+/* ---------- insights ---------- */
+.insights{padding:14vh var(--pad);border-top:1px solid var(--line)}
+.insights header{display:flex;justify-content:space-between;align-items:end;gap:var(--pad);margin-bottom:8vh;flex-wrap:wrap}
+.insights h2{font-size:clamp(40px,5vw,84px);max-width:12ch}
+.posts{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+.post img{aspect-ratio:4/3;object-fit:cover;width:100%;margin-bottom:18px;transition:transform .5s}
+.post figure{overflow:hidden}
+.post:hover img{transform:scale(1.05)}
+.post .meta{color:#777;margin-bottom:10px}
+.post h3{font-family:var(--body);text-transform:none;font-weight:500;font-size:20px;line-height:1.3}
+
+/* ---------- cta + footer ---------- */
+.cta{background:var(--blue);color:#fff;padding:18vh var(--pad);text-align:center}
+.cta h2{font-size:clamp(56px,12vw,200px);margin-bottom:40px}
+footer{background:var(--black);color:#aaa;padding:10vh var(--pad) 30px}
+.fcols{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:var(--pad);margin-bottom:12vh}
+.fcols h5{color:#fff;margin-bottom:16px}
+.fcols ul{list-style:none;display:grid;gap:10px;font-size:14px}
+.fcols a:hover{color:#fff}
+.bigmark{font-family:var(--head);font-weight:700;color:#fff;font-size:clamp(48px,11.5vw,200px);line-height:.85;text-transform:uppercase;white-space:nowrap}
+.fbot{display:flex;justify-content:space-between;margin-top:30px;flex-wrap:wrap;gap:10px}
+
+/* ---------- mobile ---------- */
+@media (max-width:860px){
+  nav.top{grid-template-columns:1fr auto}
+  nav.top ul{display:none;position:absolute;top:64px;left:var(--pad);right:var(--pad);background:#111;padding:20px;border-radius:8px}
+  nav.top ul.open{display:grid}
+  .menu-btn{display:block}
+  .hero-copy{margin-left:0;padding-top:30vh}
+  .planet{width:130vw;right:-60vw}
+  .stats,.services header,.reviews header,.rely{grid-template-columns:1fr}
+  .road{height:120px}
+  .rely{padding-bottom:0}
+  .rely .left{padding:12vh 0 6vh;gap:30px}
+  .feat{padding:8vh 0}
+  .grid6,.cards,.posts{grid-template-columns:1fr}
+  .svc{border-right:0}
+  .why li{grid-template-columns:40px 1fr}
+  .why li p{grid-column:2}
+  .fcols{grid-template-columns:1fr 1fr}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.reveal{opacity:1;transform:none}}
+</style>
+</head>
+<body class="loading">
+<div id="speed" class="mono"><span id="kmh">00</span> km/h</div>
+
+<!-- preloader -->
+<div id="loader" aria-hidden="true">
+  <svg class="dotmap" id="dotmap" viewBox="0 0 360 146"></svg>
+  <div class="brand">NORTHLINE FREIGHT</div>
+  <div class="country mono" id="country">Australia</div>
+  <div class="count" id="count">0</div>
+</div>
+
+<!-- hero -->
+<section class="hero">
+  <div class="stars"></div>
+  <div class="planet"><div class="orbit"></div><div class="orbit o2"></div></div>
+  <div class="newsbar mono">News: Northline opens new cross-dock hub in Brisbane →</div>
+  <nav class="top mono">
+    <a class="logo" href="#">NORTHLINE</a>
+    <ul id="menu">
+      <li><a href="#about">About</a></li>
+      <li><a href="#services">Services</a></li>
+      <li><a href="#why">Industries</a></li>
+      <li><a href="#insights">Insights</a></li>
+      <li><a href="#">Careers</a></li>
+      <li><a href="#contact">Contact</a></li>
+    </ul>
+    <button class="menu-btn mono" aria-expanded="false" aria-controls="menu" onclick="const m=document.getElementById('menu');this.setAttribute('aria-expanded',m.classList.toggle('open'))">Menu</button>
+  </nav>
+  <div class="hero-copy">
+    <h4>Single partner</h4>
+    <h1>From port to doorstep</h1>
+    <p>Air, sea, road and customs, handled by one team that answers for every kilometre of your shipment.</p>
+    <a class="btn solid mono" href="#contact">Get a quote</a>
+    <a class="btn mono" href="#services">See services</a>
+  </div>
+</section>
+<div class="fade"></div>
+
+<!-- about / stats -->
+<section class="stats" id="about">
+  <div class="left reveal">
+    <img src="https://picsum.photos/seed/highway/600/380" alt="Highway interchange from above">
+    <h2><span class="muted">Cargo in motion.</span><br>Answerable end to end.</h2>
+  </div>
+  <div class="reveal">
+    <p class="lede">Every service sits under one roof, so your goods never fall into the gap between two vendors.</p>
+    <p class="lede">One contact, one plan, one team responsible from pickup to proof of delivery.</p>
+    <a class="pill" href="#">More about us</a>
+    <p class="mono" style="margin:12vh 0 0;border-bottom:1px solid var(--line);padding-bottom:12px">The numbers so far</p>
+    <div class="stat"><b data-count="3100" data-suffix="+">0</b><span>Consignments each month</span></div>
+    <div class="stat"><b data-count="97.6" data-suffix="%" data-dec="1">0</b><span>Delivered on schedule</span></div>
+    <div class="stat"><b data-count="12" data-suffix="+">0</b><span>Years moving freight</span></div>
+  </div>
+</section>
+
+<div class="ticker mono"><div class="track" id="t1"></div></div>
+
+<!-- yard story (all shapes drawn below; positions set by JS on scroll) -->
+<section id="story" aria-label="Animation: a reach stacker lifts a container onto a truck">
+  <div id="services" style="position:absolute;top:50%"></div>
+  <div class="stage">
+    <p class="step mono muted" id="step">01 / Yard pickup</p>
+    <svg class="scene" viewBox="0 0 1600 700" preserveAspectRatio="xMidYMax meet">
+      <defs>
+        <pattern id="haz" width="16" height="16" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="16" fill="#f2c200"/><rect x="8" width="8" height="16" fill="#111"/></pattern>
+        <pattern id="corr" width="14" height="10" patternUnits="userSpaceOnUse"><rect width="14" height="10" fill="#e8e8e8"/><rect width="5" height="10" fill="#cdcdcd"/></pattern>
+      </defs>
+      <text id="word" x="1700" y="560" font-family="Chakra Petch,Arial" font-weight="700" font-size="380" fill="#ececec" opacity="0">SERVICES</text>
+
+      <!-- SIDE VIEW -->
+      <g id="side">
+        <g id="cBlue" transform="translate(1150,470)"></g>
+        <g id="cOrange" transform="translate(1365,470)"></g>
+        <g id="veh">
+          <line id="ram" stroke="#6b6b6b" stroke-width="18" stroke-linecap="round"/>
+          <rect x="20" y="520" width="110" height="130" rx="8" fill="#2a2a2a"/>
+          <path d="M40 650V580q0-20 20-20h410q20 0 20 20v70z" fill="#ff7a1a"/>
+          <rect x="240" y="420" width="110" height="145" rx="8" fill="#2a2a2a"/>
+          <rect x="254" y="434" width="82" height="70" rx="4" fill="#9ec5ff" opacity=".75"/>
+          <g id="boom">
+            <rect id="inner" x="0" y="-16" width="560" height="32" fill="#4a4f57"/>
+            <rect x="-30" y="-24" width="420" height="48" rx="4" fill="#2f333a"/>
+            <text x="60" y="7" font-family="JetBrains Mono,monospace" font-size="18" letter-spacing="3" fill="#cfd3da">NORTHLINE LIFT</text>
+          </g>
+          <g class="wh" data-cx="110" data-cy="642" data-r="58"></g>
+          <g class="wh" data-cx="420" data-cy="642" data-r="58"></g>
+        </g>
+        <g id="cWhite" transform="translate(1150,240)"></g>
+        <g id="sSpread">
+          <rect x="-14" y="0" width="28" height="30" fill="#2a2a2a"/>
+          <rect x="-110" y="30" width="220" height="18" fill="url(#haz)"/>
+        </g>
+      </g>
+
+      <!-- FRONT VIEW -->
+      <g id="front" opacity="0" transform="translate(-250,0)">
+        <rect id="col" x="770" width="60" fill="#333"/>
+        <rect x="660" y="610" width="50" height="90" rx="10" fill="#151515"/><rect x="712" y="610" width="50" height="90" rx="10" fill="#151515"/>
+        <rect x="838" y="610" width="50" height="90" rx="10" fill="#151515"/><rect x="890" y="610" width="50" height="90" rx="10" fill="#151515"/>
+        <rect x="680" y="580" width="240" height="60" rx="6" fill="#ff7a1a"/>
+        <rect x="740" y="465" width="120" height="125" rx="8" fill="#2a2a2a"/>
+        <rect x="752" y="479" width="96" height="70" rx="4" fill="#9ec5ff" opacity=".7"/>
+        <rect x="775" y="650" width="50" height="26" fill="#222"/>
+      </g>
+      <g id="fSpreadWrap" opacity="0"><g id="fSpread">
+          <rect x="770" y="-46" width="60" height="46" fill="#2a2a2a"/>
+          <rect x="310" y="0" width="980" height="28" fill="#3a3a3a"/>
+          <rect x="310" y="0" width="26" height="28" fill="url(#haz)"/><rect x="1264" y="0" width="26" height="28" fill="url(#haz)"/>
+        </g>
+      </g>
+
+      <!-- TRUCK (side, facing right) -->
+      <g id="truck" opacity="0">
+        <rect x="0" y="600" width="900" height="16" fill="#222"/>
+        <rect x="20" y="616" width="110" height="24" fill="#333"/>
+        <rect x="430" y="618" width="230" height="12" fill="#9a9a9a"/>
+        <rect x="700" y="616" width="8" height="72" fill="#333"/>
+        <rect x="880" y="606" width="300" height="34" fill="#222"/>
+        <path d="M960 640V445q0-25 25-27h125q30 2 40 42l10 180z" fill="#1d1d1d"/>
+        <path d="M1100 440h35q10 30 13 60h-48z" fill="#9ec5ff" opacity=".7"/>
+        <rect x="975" y="470" width="105" height="6" fill="#333"/><rect x="975" y="484" width="105" height="6" fill="#333"/>
+        <rect x="1152" y="590" width="10" height="14" fill="#fff6d8"/>
+        <g class="wh" data-cx="160" data-cy="658" data-r="42"></g>
+        <g class="wh" data-cx="255" data-cy="658" data-r="42"></g>
+        <g class="wh" data-cx="350" data-cy="658" data-r="42"></g>
+        <g class="wh" data-cx="950" data-cy="656" data-r="44"></g>
+        <g class="wh" data-cx="1100" data-cy="656" data-r="44"></g>
+      </g>
+
+      <!-- long container (front view + on the truck) -->
+      <g id="longbox" opacity="0">
+        <rect x="-490" y="0" width="980" height="230" fill="url(#corr)"/>
+        <rect x="-490" y="0" width="980" height="10" fill="#cfcfcf"/>
+        <rect x="-490" y="220" width="980" height="10" fill="#bdbdbd"/>
+      </g>
+    </svg>
+    <div class="turnwrap" id="turnwrap" aria-hidden="true"><div class="turn" id="turn"></div></div>
+    <div class="ground">
+      <div class="svc-head">
+    <h2>One network.<br><span class="muted">Every mode.</span></h2>
+    <div>
+      <p>Planes, ships, trucks and warehouses, coordinated as one system instead of four separate suppliers.</p>
+      <p>You get a single booking, a single invoice and a live view of where everything is.</p>
+    </div>
+  </div>
+      <div class="svc-track" id="svcTrack">
+    <article class="svc"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><path d="M2 16l20-6-3-3-7 2-6-5-2 1 4 6-4 1-2-2-1 1z"/></svg><h3>Air freight</h3><p>Next-flight, consolidated and charter options on the busiest trade lanes, tracked from tarmac to tarmac.</p></article>
+    <article class="svc"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><path d="M3 15h18l-2 5H5zM6 15V9h12v6M9 9V5h6v4"/></svg><h3>Sea freight</h3><p>Full and shared container loads with carrier selection weighed on transit time, cost and reliability.</p></article>
+    <article class="svc"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><path d="M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h5"/></svg><h3>Customs</h3><p>Licensed brokers in-house for tariff classification, duty, biosecurity and permits.</p></article>
+    <article class="svc"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><path d="M3 10l9-6 9 6v11H3zM7 21v-7h10v7M7 17h10"/></svg><h3>Warehousing</h3><p>Storage, pick-pack and dispatch connected straight into your inbound and outbound freight.</p></article>
+    <article class="svc"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><path d="M4 20V8l8-4 8 4v12M8 20v-6h8v6M12 4v4"/></svg><h3>Heavy lift</h3><p>Out-of-gauge and project shipments with route surveys, escorts and engineered lashing.</p></article>
+    <article class="svc"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><path d="M2 6h12v10H2zM14 10h4l4 4v2h-8M6 19a2 2 0 100-4 2 2 0 000 4zM18 19a2 2 0 100-4 2 2 0 000 4z"/></svg><h3>Road transport</h3><p>Metro, regional and interstate trucking with set service levels and photo proof of delivery.</p></article>
+      </div>
+      <a class="btn mono more" id="svcMore" href="#">All services</a>
+    </div>
+    <div class="routeLayer" id="routeLayer" aria-hidden="true"><svg id="routeSvg"></svg></div>
+    <div class="t3wrap" id="t3wrap" aria-hidden="true"><div class="t3" id="t3"><div class="t3side" id="t3side"></div><div class="t3top" id="t3top"></div></div></div>
+  </div>
+</section>
+
+
+
+<!-- reliability -->
+<section class="rely">
+  <svg class="relyRoad" id="relyRoad" aria-hidden="true"></svg>
+  <div class="left">
+    <h2 class="reveal"><span class="muted">Steady</span><br>at every<br>checkpoint</h2>
+    <p class="reveal">Clear plans, early warnings and people who pick up the phone. That's what keeps a supply chain calm.</p>
+  </div>
+  <div class="road" aria-hidden="true">
+    <div class="rig">
+      <!-- top-down semi truck: cab at the bottom so it drives "down" the page -->
+      <svg viewBox="0 0 60 220">
+        <rect x="4" y="4" width="52" height="150" rx="2" fill="#d9d9d9"/>
+        <g stroke="#b5b5b5" stroke-width="1.2"><path d="M8 14h44M8 24h44M8 34h44M8 44h44M8 54h44M8 64h44M8 74h44M8 84h44M8 94h44M8 104h44M8 114h44M8 124h44M8 134h44M8 144h44"/></g>
+        <rect x="0" y="22" width="4" height="22" rx="1" fill="#111"/><rect x="56" y="22" width="4" height="22" rx="1" fill="#111"/>
+        <rect x="0" y="120" width="4" height="22" rx="1" fill="#111"/><rect x="56" y="120" width="4" height="22" rx="1" fill="#111"/>
+        <rect x="24" y="154" width="12" height="10" fill="#222"/>
+        <rect x="6" y="162" width="48" height="54" rx="8" fill="#1d1d1d"/>
+        <rect x="10" y="192" width="40" height="16" rx="3" fill="#9ec5ff" opacity=".7"/>
+        <rect x="10" y="168" width="40" height="18" rx="2" fill="#2a2a2a"/>
+        <rect x="2" y="196" width="4" height="6" fill="#222"/><rect x="54" y="196" width="4" height="6" fill="#222"/>
+        <circle cx="13" cy="214" r="2.4" fill="#fff6d8"/><circle cx="47" cy="214" r="2.4" fill="#fff6d8"/>
+      </svg>
+      <div class="beam"></div>
+    </div>
+  </div>
+  <div>
+    <div class="feat reveal"><svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.5"><circle cx="12" cy="10" r="4"/><path d="M12 2v2M12 16v6M4 10H2M22 10h-2"/></svg><h3>Live shipment<br>tracking</h3><p>See each milestone as it happens, with alerts the moment anything slips.</p></div>
+    <div class="feat reveal"><svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg><h3>Worldwide<br>agent network</h3><p>Vetted partners across Asia, Europe and the Americas, on every lane you ship.</p></div>
+    <div class="feat reveal"><svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.5"><path d="M4 14v-2a8 8 0 0116 0v2M4 14h3v5H4zM17 14h3v5h-3z"/></svg><h3>Round-the-clock<br>support</h3><p>A real person answers, day or night, and stays on it until it's fixed.</p></div>
+  </div>
+</section>
+
+
+<!-- why -->
+<section class="why" id="why">
+  <p class="mono muted">Why Northline</p>
+  <h2 class="reveal">Logistics without the runaround</h2>
+  <ol>
+    <li class="reveal"><h3>One contact</h3><p>A dedicated account lead owns your shipment from first quote to final signature.</p></li>
+    <li class="reveal"><h3>Total visibility</h3><p>Live tracking plus proactive updates, so you hear about delays before your customer does.</p></li>
+    <li class="reveal"><h3>Compliance handled</h3><p>Our brokers keep paperwork, duties and permits correct across every border you cross.</p></li>
+    <li class="reveal"><h3>Honest pricing</h3><p>Itemised quotes with no surprise surcharges once the freight is moving.</p></li>
+    <li class="reveal"><h3>Problems solved fast</h3><p>When plans change we reroute, rebook and tell you exactly what happened.</p></li>
+  </ol>
+</section>
+
+<!-- testimonials (placeholder people) -->
+<section class="reviews">
+  <header class="reveal">
+    <h2><span class="muted">Shippers</span><br>who stay</h2>
+    <p>From first-time importers to high-volume retailers, our customers keep coming back. (Sample reviews: replace with your own.)</p>
+  </header>
+  <div class="cards">
+    <figure class="card reveal"><q>They plan every consignment around what it actually is, not a template. Our account manager knows our business better than our last three forwarders combined.</q><figcaption class="who"><b>Jordan Lee</b><span>Operations Lead, Sample Co.</span></figcaption></figure>
+    <figure class="card reveal"><q>Our first shipment into a new market had a dozen unknowns. Northline walked us through every permit and the goods arrived on day one of the install window.</q><figcaption class="who"><b>Priya Shah</b><span>Supply Chain Manager, Example Ltd.</span></figcaption></figure>
+    <figure class="card reveal"><q>Shorter lead times out of Asia and real savings on rates. When something goes wrong, they call us first with the fix already in motion.</q><figcaption class="who"><b>Sam Carter</b><span>Head of Logistics, Demo Retail</span></figcaption></figure>
+  </div>
+</section>
+
+<!-- partners -->
+<section class="partners">
+  <p class="label mono muted">Carrier partners</p>
+  <div class="ticker" style="border:0"><div class="track" id="t2"></div></div>
+</section>
+
+<!-- insights -->
+<section class="insights" id="insights">
+  <header>
+    <h2 class="reveal">What's shifting in trade</h2>
+    <a class="pill" href="#">View all</a>
+  </header>
+  <div class="posts">
+    <a class="post reveal" href="#"><figure><img src="https://picsum.photos/seed/port1/800/600" alt=""></figure><p class="meta mono">Asia Pacific | Oct 2026</p><h3>Peak season capacity: how to book space before rates climb</h3></a>
+    <a class="post reveal" href="#"><figure><img src="https://picsum.photos/seed/ship2/800/600" alt=""></figure><p class="meta mono">Ocean | Sep 2026</p><h3>Transpacific schedule reliability: what the latest numbers mean for importers</h3></a>
+    <a class="post reveal" href="#"><figure><img src="https://picsum.photos/seed/truck3/800/600" alt=""></figure><p class="meta mono">Customs | Aug 2026</p><h3>Five paperwork mistakes that hold freight at the border</h3></a>
+  </div>
+</section>
+
+<!-- cta -->
+<section class="cta" id="contact">
+  <h2 class="reveal">Let's move</h2>
+  <a class="btn solid mono" href="mailto:hello@example.com">Talk to our team</a>
+</section>
+
+<footer>
+  <div class="fcols">
+    <div><h5 class="mono">Northline Freight</h5><p style="max-width:280px;line-height:1.5;font-size:14px">Freight forwarding, customs and transport. One team, every leg.</p></div>
+    <div><h5 class="mono">Company</h5><ul><li><a href="#about">About</a></li><li><a href="#">Careers</a></li><li><a href="#insights">Insights</a></li></ul></div>
+    <div><h5 class="mono">Services</h5><ul><li><a href="#services">Air</a></li><li><a href="#services">Sea</a></li><li><a href="#services">Customs</a></li><li><a href="#services">Road</a></li></ul></div>
+    <div><h5 class="mono">Contact</h5><ul><li><a href="mailto:hello@example.com">hello@example.com</a></li><li>+00 0000 0000</li></ul></div>
+  </div>
+  <div class="bigmark">Northline</div>
+  <div class="fbot mono"><span>© 2026 Northline Freight</span><span>Privacy · Terms</span></div>
+</footer>
+
+<script>
+// tickers: duplicate content so the -50% loop is seamless
+const fill=(id,items,sep)=>{const h=items.map(t=>`<span>${t}</span>`).join(sep);document.getElementById(id).innerHTML=h+sep+h};
+fill('t1',['Air freight','Sea freight','Customs','Warehousing','Heavy lift','Road transport'],'<span>✦</span>');
+fill('t2',['Skyway Air','Bluewater Lines','Meridian Cargo','Atlas Ocean','Nimbus Air','Harbor Star'],'');
+
+
+// ---------- preloader: dotted world map + city pings + 0-100 counter ----------
+// ponytail: hand-traced low-res continent outlines (lon,lat); swap for real GeoJSON if you need accuracy
+const land=[
+ [[-168,66],[-140,70],[-95,72],[-80,63],[-60,55],[-55,48],[-70,43],[-76,35],[-80,26],[-97,26],[-97,18],[-88,15],[-83,9],[-78,8],[-90,14],[-105,20],[-112,30],[-118,34],[-124,40],[-125,49],[-135,58],[-150,60],[-165,62]],
+ [[-55,60],[-45,60],[-20,72],[-25,82],[-60,82],[-70,76]],
+ [[-80,10],[-60,11],[-50,0],[-35,-6],[-40,-22],[-48,-28],[-58,-38],[-65,-55],[-72,-50],[-72,-18],[-81,-5]],
+ [[-10,36],[0,43],[-5,48],[5,52],[8,58],[5,62],[15,70],[30,71],[40,66],[40,45],[28,40],[20,38],[12,44],[15,38],[5,38]],
+ [[-6,50],[2,51],[-2,58],[-6,57]],
+ [[-17,15],[-17,22],[-10,30],[-5,36],[10,37],[20,32],[32,31],[35,28],[43,12],[51,12],[40,-2],[40,-15],[35,-25],[20,-35],[17,-28],[12,-15],[10,-2],[8,4],[-8,4],[-15,10]],
+ [[44,-13],[50,-15],[47,-25],[44,-22]],
+ [[40,45],[40,66],[60,70],[80,73],[110,77],[140,72],[180,68],[170,60],[160,58],[140,52],[135,43],[127,38],[122,30],[120,22],[108,20],[105,10],[100,13],[98,8],[93,18],[90,22],[80,15],[77,8],[72,20],[66,25],[57,25],[52,27],[57,22],[52,16],[43,13],[36,30],[36,36]],
+ [[95,5],[105,-6],[120,-9],[140,-8],[150,-10],[140,0],[125,8],[120,18],[110,0],[100,0]],
+ [[130,31],[141,35],[145,44],[140,42],[132,34]],
+ [[114,-22],[122,-18],[130,-12],[137,-12],[142,-11],[146,-19],[153,-28],[150,-37],[140,-38],[132,-32],[115,-34]],
+ [[172,-35],[178,-38],[172,-46],[167,-46]]
+];
+const inPoly=(x,y,p)=>{let c=false;for(let i=0,j=p.length-1;i<p.length;j=i++){const[xi,yi]=p[i],[xj,yj]=p[j];if((yi>y)!==(yj>y)&&x<(xj-xi)*(y-yi)/(yj-yi)+xi)c=!c}return c};
+const cities=[['Australia',151,-34],['New Zealand',175,-37],['Hong Kong',114,22],['China',121,31],['Vietnam',106,11],['United States',-118,34],['Thailand',100,14],['Germany',9,50],['United Kingdom',0,52]];
+let dots='';
+for(let lat=81;lat>-60;lat-=3)for(let lon=-177;lon<180;lon+=3)if(land.some(p=>inPoly(lon,lat,p)))dots+=`<circle cx="${lon+180}" cy="${84-lat}" r="1"/>`;
+dots+=cities.map(([,lon,lat],i)=>`<circle class="city" id="city${i}" cx="${lon+180}" cy="${84-lat}" r="1.8"/>`).join('');
+const map=document.getElementById('dotmap');map.innerHTML=dots;
+let n=0,lit=-1;const t0=performance.now();const cEl=document.getElementById('count'),pEl=document.getElementById('country');
+const tick=setInterval(()=>{
+  n=Math.min(100,Math.floor((performance.now()-t0)/25));cEl.textContent=n; // time-based: ~2.5s even if timers get throttled
+  const i=Math.min(cities.length-1,Math.floor(n/100*cities.length));
+  if(i!==lit){lit=i;const c=document.getElementById('city'+i);c.classList.add('on');pEl.textContent=cities[i][0];
+    map.insertAdjacentHTML('beforeend',`<circle class="ping" cx="${c.getAttribute('cx')}" cy="${c.getAttribute('cy')}" r="1.8"/>`)}
+  if(n>=100){clearInterval(tick);setTimeout(()=>{document.getElementById('loader').classList.add('done');document.body.classList.remove('loading')},500)}
+},45);
+
+// ---------- yard story ----------
+const $=id=>document.getElementById(id);
+const clamp=(v,a=0,b=1)=>Math.min(b,Math.max(a,v)), seg=(p,a,b)=>clamp((p-a)/(b-a)), lerp=(a,b,t)=>a+(b-a)*t;
+const ease=t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+// container door end, 210x230
+const endBox=(fill,shade,code)=>`<rect width="210" height="230" fill="${fill}"/><rect width="210" height="12" fill="${shade}"/><rect y="218" width="210" height="12" fill="${shade}"/>
+  <rect x="0" y="0" width="10" height="230" fill="${shade}"/><rect x="200" y="0" width="10" height="230" fill="${shade}"/>
+  <path d="M105 12v206M40 14v204M70 14v204M140 14v204M170 14v204" stroke="${shade}" stroke-width="4"/>
+  <rect x="14" y="14" width="40" height="8" fill="url(#haz)"/><rect x="156" y="14" width="40" height="8" fill="url(#haz)"/>
+  <text x="114" y="44" font-family="JetBrains Mono,monospace" font-size="11" fill="#333">${code}</text>`;
+$('cWhite').innerHTML=endBox('#e6e6e6','#c4c4c4','NLFU 204518');
+$('cBlue').innerHTML=endBox('#1c3a8a','#132a66','NLFU 381120');
+$('cOrange').innerHTML=endBox('#ef6a1a','#c4520d','NLFU 772093');
+// wheels: tyre + rim + spokes so rotation is visible
+document.querySelectorAll('.wh').forEach(w=>{const{cx,cy,r}=w.dataset;
+  w.innerHTML=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="#151515"/><circle cx="${cx}" cy="${cy}" r="${r*.45}" fill="#bdbdbd"/><path d="M${cx-r*.42} ${cy}h${r*.84}M${cx} ${cy-r*.42}v${r*.84}" stroke="#666" stroke-width="5"/><circle cx="${cx}" cy="${cy}" r="${r*.14}" fill="#444"/>`});
+const spin=(g,dist)=>g.querySelectorAll('.wh').forEach(w=>w.setAttribute('transform',`rotate(${dist/w.dataset.r*57.3} ${w.dataset.cx} ${w.dataset.cy})`));
+
+const story=$('story'),stage=story.querySelector('.stage'),steps=['01 / Yard pickup','02 / Lift','03 / Load','04 / On the road','05 / Services','06 / En route'];
+const svcHead=document.querySelector('.svc-head'),svcTrack=$('svcTrack'),svcMore=$('svcMore');
+
+// ---------- camera tilt + top-down route (same stage), ends lined up with the reliability road ----------
+// top-down truck: trailer (ribbed) + cab, pointing +x; sizes in road-widths so it matches the road scale
+const truckMarkup=(cab,trl)=>`<g id="${trl}"><rect x="${-RW*1.05}" y="${-RW*.12}" width="${RW*1.05}" height="${RW*.24}" fill="url(#ribs)" stroke="#bbb"/></g>
+    <g id="${cab}"><rect x="${-RW*.22}" y="${-RW*.12}" width="${RW*.22}" height="${RW*.24}" rx="5" fill="#1d1d1d"/><rect x="${-RW*.08}" y="${-RW*.1}" width="${RW*.05}" height="${RW*.2}" rx="2" fill="#9ec5ff" opacity=".7"/></g>`;
+// cab front at path length s; trailer hangs off the hitch behind it (= articulation on bends)
+function placeTruck(path,s,cab,trl){
+  const at=d=>path.getPointAtLength(d),fr=at(s),f2=at(s-1),h=at(s-RW*.22),b=at(s-RW*1.27),ang=(a,c)=>Math.atan2(a.y-c.y,a.x-c.x)*57.3;
+  $(cab).setAttribute('transform',`translate(${fr.x},${fr.y}) rotate(${ang(fr,f2)})`);
+  $(trl).setAttribute('transform',`translate(${h.x},${h.y}) rotate(${ang(h,b)})`);
+}
+const rSvg=$('routeSvg'),rLayer=$('routeLayer'),ground=story.querySelector('.ground'),t3wrap=$('t3wrap'),t3=$('t3');
+let rPath,rLen,RW,G;
+function buildRoute(){
+  const W=document.documentElement.clientWidth,H=innerHeight,r=document.querySelector('.road').getBoundingClientRect();
+  // side-view truck's screen box once the ground has risen: scene svg 1600x700, xMidYMax meet, box = 4vh..42vh
+  const k=Math.min(W/1600,H*.38/700),ox=(W-1600*k)/2,svgTop=H*.42-700*k;
+  const L=1170*k,sh=340*k,d=L*.19,left=ox+330*k,top=svgTop+360*k,cxT=left+L/2,ycT=top+sh/2;
+  // map at final scale: horizontal road at y0, bend down into the reliability road (cx, width RW)
+  RW=Math.min(r.width,W*.3);
+  const cx=r.left+r.width/2,R=Math.min(H*.32,cx*.55),lane=RW*.18,y0=H*.3,by=y0+R+H*.2;
+  const m0=L/(1.27*RW),xc=Math.max(cx-R-.8*RW,.7*RW); // zoom where the map truck matches the 3D truck; truck parks before the bend
+  G={H,L,d,sh,cxT,ycT,B:RW*m0,m0,sH:xc+W+.635*RW,T0x:cxT-m0*xc,T0y:ycT-m0*y0};
+
+  // 3D box faces: side = clone of the svg truck, roof = top-down drawing in the same proportions as the map truck
+  Object.assign(t3.style,{left:left+'px',top:top+'px',width:L+'px',height:sh+'px'});
+  t3wrap.style.perspectiveOrigin=`${cxT}px ${ycT}px`;
+  const side=document.createElementNS('http://www.w3.org/2000/svg','svg');side.setAttribute('viewBox','0 360 1170 340');
+  const tc=$('truck').cloneNode(true),bc=$('longbox').cloneNode(true);
+  [tc,bc].forEach(n=>{n.removeAttribute('id');n.removeAttribute('opacity');n.removeAttribute('visibility')});
+  tc.removeAttribute('transform');bc.setAttribute('transform','translate(450,370)');side.append(tc,bc);
+  $('t3side').replaceChildren(side);$('t3side').style.transform=`translateZ(${d/2}px)`;
+  $('t3top').style.height=d+'px';$('t3top').style.transform=`translateZ(${d/2}px) rotateX(90deg)`;
+  $('t3top').innerHTML=`<svg viewBox="0 0 1270 240" preserveAspectRatio="none"><defs><pattern id="ribsT" width="24" height="10" patternUnits="userSpaceOnUse"><rect width="24" height="10" fill="#e2e2e2"/><rect width="7" height="10" fill="#b8b8b8"/></pattern></defs>
+    <rect width="1050" height="240" fill="url(#ribsT)" stroke="#aaa" stroke-width="4"/><rect x="1050" width="220" height="240" rx="22" fill="#1d1d1d"/><rect x="1190" y="20" width="50" height="200" rx="10" fill="#9ec5ff" opacity=".7"/></svg>`;
+
+  // centre line (o=0) or a lane line offset o toward the inside of the bend
+  const path=o=>`M${-W} ${y0+o}H${cx-R}A${R-o} ${R-o} 0 0 1 ${cx-o} ${y0+R}V${H+RW*1.35}`;
+  const dash=`stroke="#555" stroke-width="4" stroke-dasharray="40 70" fill="none"`;
+  rSvg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+  rSvg.innerHTML=`<defs><pattern id="ribs" width="8" height="10" patternUnits="userSpaceOnUse"><rect width="8" height="10" fill="#d9d9d9"/><rect width="2" height="10" fill="#b0b0b0"/></pattern></defs>
+   <g id="cam">
+    <path d="M${cx} ${by}H${W*3}" stroke="#0d0d0d" stroke-width="${RW}" fill="none"/>
+    <path d="M${cx+RW/2} ${by-lane}H${W*3}M${cx+RW/2} ${by+lane}H${W*3}" ${dash}/>
+    <path id="rp" d="${path(0)}" stroke="#0d0d0d" stroke-width="${RW}" fill="none"/>
+    <path d="${path(lane)}" ${dash}/><path d="${path(-lane)}" ${dash}/>
+    ${truckMarkup('rCab','rTrailer')}
+   </g>`;
+  rPath=$('rp');rLen=rPath.getTotalLength();
+}
+function drawRoute(R){
+  // a) camera tilts 90deg: side view -> roof view (translateZ keeps the visible face at the same size)
+  const f=ease(seg(R,.05,.3)),flipping=R>0&&R<.3;
+  $('truck').setAttribute('visibility',R>0?'hidden':'visible');$('longbox').setAttribute('visibility',R>0?'hidden':'visible');
+  t3wrap.style.visibility=flipping?'visible':'hidden';
+  t3.style.transform=`translateZ(${-(G.d/2)*(1-f)-(G.sh/2)*f}px) rotateX(${-90*f}deg)`;
+  // b) black ground narrows into a road band around the truck, then the map takes over
+  if(R>0){const t=lerp(G.H*.42,G.ycT-G.B/2,f);Object.assign(ground.style,{bottom:'auto',top:t+'px',height:lerp(G.H,G.ycT+G.B/2,f)-t+'px'})}
+  else ground.style.top=ground.style.height=ground.style.bottom='';
+  ground.style.opacity=1-seg(R,.3,.34);
+  rLayer.style.opacity=seg(R,.26,.3);
+  // c) camera zooms out to map scale (lands exactly on the reliability road), truck follows the bend
+  const z=ease(seg(R,.3,.55));
+  $('cam').setAttribute('transform',`translate(${lerp(G.T0x,0,z)},${lerp(G.T0y,0,z)}) scale(${lerp(G.m0,1,z)})`);
+  ['rCab','rTrailer'].forEach(id=>$(id).setAttribute('visibility',R>=.3?'visible':'hidden'));
+  placeTruck(rPath,lerp(G.sH,rLen,ease(seg(R,.36,1))),'rCab','rTrailer');
+}
+
+// ---------- reliability road: continues from the route, bends left at the bottom, truck parks in a bay ----------
+const relyEl=document.querySelector('.rely'),relySvg=$('relyRoad');let pPath,pEnd;
+function buildRely(){
+  const W=document.documentElement.clientWidth,H=innerHeight,road=document.querySelector('.road').getBoundingClientRect(),sec=relyEl.getBoundingClientRect();
+  const Hs=relyEl.offsetHeight,cx=road.left+road.width/2-sec.left,R=Math.min(H*.22,cx*.45),legY=Hs-H*.22,yTurn=legY-R,lane=RW*.18;
+  const xEnd=24+RW*.5,xFront=24+RW*.35,bayEnd=xFront+RW*1.27+24;
+  // starts 2 road-widths above the section (clipped) so the truck can enter from the top edge
+  const path=(o,x)=>`M${cx-o} ${-2*RW}V${yTurn}A${R-o} ${R-o} 0 0 1 ${cx-R} ${legY-o}H${x}`;
+  const dash=`stroke="#555" stroke-width="4" stroke-dasharray="40 70" fill="none"`;
+  relySvg.setAttribute('viewBox',`0 0 ${W} ${Hs}`);
+  relySvg.innerHTML=`<path id="pp" d="${path(0,xEnd)}" stroke="#0d0d0d" stroke-width="${RW}" stroke-linecap="round" fill="none"/>
+    <path d="${path(lane,bayEnd+30)}" ${dash}/><path d="${path(-lane,bayEnd+30)}" ${dash}/>
+    <path d="M${bayEnd} ${legY-RW*.2}H${xFront-10}V${legY+RW*.2}H${bayEnd}" stroke="#fff" stroke-width="4" fill="none"/>
+    <text x="${xFront}" y="${legY+RW*.4}" fill="#777" font-family="JetBrains Mono,monospace" font-size="12" letter-spacing="2">PARKED / DELIVERED</text>
+    ${truckMarkup('pCab','pTrailer')}`;
+  pPath=$('pp');pEnd=pPath.getTotalLength()-(xFront-xEnd); // path length where the cab front sits at the stop line
+}
+function drawRely(){
+  // sticky-like: front starts where the route truck left the screen (1.35 road-widths below the top), rides up, holds at 55% of the screen
+  const front=Math.max(RW*1.35,innerHeight*.55-relyEl.getBoundingClientRect().top);
+  placeTruck(pPath,Math.min(front+2*RW,pEnd),'pCab','pTrailer');
+}
+buildRoute();buildRely();
+const rebuild=()=>{buildRoute();buildRely();turnBuilt=false;lastP=-1};
+addEventListener('resize',rebuild);addEventListener('load',rebuild);document.fonts.ready.then(rebuild);
+
+// ---------- 3D turn: side view -> front view ----------
+// scene units: container centre (1030,252) is the pivot; container 210 wide x 980 long, stacker 300 wide.
+// faces facing the camera (+Z) are the side view, faces facing +X are the front view; rotateY(-90deg) swaps them.
+const turnWrap=$('turnwrap'),turn=$('turn');let turnBuilt=false;
+const sceneK=()=>{const W=document.documentElement.clientWidth,H=innerHeight,k=Math.min(W/1600,H*.82/700);return{k,ox:(W-1600*k)/2,oy:H*.86-700*k}};
+const clean=el=>el.outerHTML.replace(/ (id|visibility)="[^"]*"/g,'').replace(/ opacity="[^"]*"/,'');
+function buildTurn(){
+  const{k}=sceneK(),P=[1030,252];
+  // [viewBox x,y,w,h], svg content, plane: 'z' (faces camera at depth d) or 'x' (faces +X at x=d)
+  const faces=[
+    [[400,60,680,640],clean($('veh')),'z',150],
+    [[920,89,220,278],clean($('sSpread'))+clean($('cWhite')),'z',490],
+    [[400,137,300,563],clean($('front')),'x',940],
+    [[-490,-74,980,304],`<rect x="-30" y="-74" width="60" height="46" fill="#2a2a2a"/><rect x="-490" y="-28" width="980" height="28" fill="#3a3a3a"/>
+      <rect x="-490" y="-28" width="26" height="28" fill="url(#haz)"/><rect x="464" y="-28" width="26" height="28" fill="url(#haz)"/>
+      <rect x="-490" width="980" height="230" fill="url(#corr)"/><rect x="-490" width="980" height="10" fill="#cfcfcf"/><rect x="-490" y="220" width="980" height="10" fill="#bdbdbd"/>`,'x',1135,63]
+  ];
+  turn.innerHTML=faces.map(([[x,y,w,h],svg,plane,d,top])=>{
+    const t=plane==='z'?`translate3d(${(x-P[0])*k}px,${(y-P[1])*k}px,${d*k}px)`
+                       :`translate3d(${(d-P[0])*k}px,${((top??y)-P[1])*k}px,${w/2*k}px) rotateY(90deg)`;
+    return `<div class="tface" style="width:${w*k}px;height:${h*k}px;transform:${t}"><svg viewBox="${x} ${y} ${w} ${h}" preserveAspectRatio="none">${svg}</svg></div>`}).join('');
+  turnBuilt=true;
+}
+function drawTurn(on,f){
+  turnWrap.style.visibility=on?'visible':'hidden';
+  if(!on)return;
+  if(!turnBuilt)buildTurn();
+  const{k,ox,oy}=sceneK(),x=ox+lerp(1030,550,f)*k,y=oy+252*k;
+  Object.assign(turn.style,{left:x+'px',top:y+'px',transform:`rotateY(${-90*f}deg)`});
+  // near-flat at both ends (so the swap with the flat svg is seamless), real depth mid-turn
+  turnWrap.style.perspective=3000/Math.max(Math.sin(Math.PI*f),.03)+'px';
+  turnWrap.style.perspectiveOrigin=`${x}px ${y}px`;
+}
+
+function drawStory(P){
+  const p=Math.min(1,P/.45),S=seg(P,.45,.75),R=seg(P,.75,1); // scroll split: yard story / services under the truck / top-down route
+  // 1. drive in with boom raised, 2. reach down to the white box, 3. lift it
+  const tA=ease(seg(p,0,.18)),tB=ease(seg(p,.18,.24)),tC=ease(seg(p,.24,.36));
+  let vx=lerp(-700,586,tA),a=-34,L=560;
+  if(p>.18){a=lerp(-34,-28,tB);L=lerp(560,656,tB)}
+  if(p>.24){a=lerp(-28,-40,tC);L=lerp(656,640,tC);vx=lerp(586,450,tC)}
+  const r=a*Math.PI/180,cos=Math.cos(r),sin=Math.sin(r),tx=vx+90+L*cos,ty=500+L*sin;
+  $('veh').setAttribute('transform',`translate(${vx},0)`);
+  $('boom').setAttribute('transform',`translate(90,500) rotate(${a})`);
+  $('inner').setAttribute('width',L);
+  $('ram').setAttribute('x1',380);$('ram').setAttribute('y1',580);$('ram').setAttribute('x2',90+300*cos);$('ram').setAttribute('y2',500+300*sin);
+  $('sSpread').setAttribute('transform',`translate(${tx},${ty})`);
+  $('cWhite').setAttribute('transform',p<.24?'translate(1150,240)':`translate(${tx-105},${ty+48})`);
+  spin($('veh'),vx);
+  // 4. cut to front view
+  const cut=ease(seg(p,.36,.44)),done=cut>=1;
+  ['veh','cWhite','sSpread'].forEach(id=>$(id).setAttribute('visibility',cut>0?'hidden':'visible'));
+  $('cBlue').setAttribute('opacity',1-cut);$('cOrange').setAttribute('opacity',1-cut);
+  drawTurn(cut>0&&!done,cut);
+  // stacker body fades as the truck arrives; spreader stays on the box until it's set down
+  $('front').setAttribute('opacity',done?1-seg(p,.46,.54):0);
+  $('fSpreadWrap').setAttribute('opacity',done?1-seg(p,.62,.68):0);
+  // 5. truck rolls in under the box, 6. box lowers, 7. truck drives on (front view is centred at x=550)
+  const trx=lerp(-1500,100,ease(seg(p,.44,.56)))+lerp(0,230,ease(seg(p,.68,1)));
+  $('truck').setAttribute('opacity',seg(p,.4,.44));
+  $('truck').setAttribute('transform',`translate(${trx},0)`);spin($('truck'),trx+seg(P,.45,.8)*5000);
+  const top=lerp(137,370,ease(seg(p,.56,.62))),bx=trx+450;
+  $('longbox').setAttribute('opacity',done?1:0);
+  $('longbox').setAttribute('transform',`translate(${p>.62?bx:550},${top})`);
+  $('fSpread').setAttribute('transform',`translate(-250,${top-28})`);
+  $('col').setAttribute('y',top);$('col').setAttribute('height',Math.max(0,560-top));
+  $('word').setAttribute('x',lerp(1700,-2400,seg(P,.28,.75)));$('word').setAttribute('opacity',seg(p,.6,.66)*(1-seg(R,0,.1)));
+  $('step').textContent=steps[R>0?5:P>.45?4:p<.24?0:p<.44?1:p<.66?2:3];
+  // 8. ground rises (scene shrinks so the truck rides its top edge), services header, then cards scroll sideways
+  stage.style.setProperty('--g',lerp(14,58,ease(seg(S,0,.2)))+'vh');
+  const hIn=seg(S,.15,.3),cIn=seg(S,.5,.6);
+  svcHead.style.opacity=hIn*(1-seg(S,.45,.55));
+  svcHead.style.transform=`translateY(${(1-hIn)*30}px)`;
+  svcTrack.style.opacity=svcMore.style.opacity=cIn;
+  const W=document.documentElement.clientWidth;
+  svcTrack.style.transform=`translateX(${lerp(W*.08,-(svcTrack.scrollWidth-W*.92),seg(S,.55,1))}px)`;
+  // 9. services fade, then the camera tilts / zooms out onto the route
+  if(R>0)svcTrack.style.opacity=svcMore.style.opacity=1-seg(R,0,.08);
+  drawRoute(R);
+}
+
+// ---------- one rAF loop: story progress + km/h from scroll speed ----------
+const speedEl=$('speed'),kmh=$('kmh'),rely=document.querySelector('.rely');
+let lastY=scrollY,v=0,lastP=-1;
+(function loop(){
+  const y=scrollY,rs=story.getBoundingClientRect(),p=clamp(-rs.top/(rs.height-innerHeight));
+  if(p!==lastP){drawStory(p);lastP=p}
+  drawRely();
+  v=v*.9+Math.abs(y-lastY)*.6;lastY=y; // ponytail: px/frame scaled to look like km/h, tune the .6 to taste
+  kmh.textContent=String(Math.min(99,Math.round(v))).padStart(2,'0');
+  const rr=rely.getBoundingClientRect();
+  speedEl.classList.toggle('on',rs.top<innerHeight&&rr.bottom>0); // story -> route -> road are back to back
+  requestAnimationFrame(loop);
+})();
+
+// reveal on scroll + count-up stats
+const io=new IntersectionObserver(es=>es.forEach(e=>{if(!e.isIntersecting)return;e.target.classList.add('in');io.unobserve(e.target)}),{threshold:.15});
+document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+const so=new IntersectionObserver(es=>es.forEach(e=>{if(!e.isIntersecting)return;so.unobserve(e.target);
+  const el=e.target,end=+el.dataset.count,dec=+(el.dataset.dec||0),t0=performance.now();
+  const step=t=>{const p=Math.min(1,(t-t0)/1600),v=end*(1-Math.pow(1-p,3));
+    el.textContent=v.toLocaleString(undefined,{minimumFractionDigits:dec,maximumFractionDigits:dec})+el.dataset.suffix;if(p<1)requestAnimationFrame(step)};
+  requestAnimationFrame(step)}),{threshold:.5});
+document.querySelectorAll('[data-count]').forEach(el=>so.observe(el));
+</script>
+</body>
+</html>
